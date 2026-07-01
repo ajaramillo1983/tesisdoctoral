@@ -22,10 +22,12 @@ PROVEEDORES = ["ChatGPT", "Claude", "Gemini", "Grok", "Otro"]
 TIPOS_ACCESO = ["Gratuito", "Pagado", "API", "Interfaz web", "Carga manual"]
 
 # Selección rápida por plataforma (proveedor + acceso combinados). 8 opciones.
+# Orden solicitado: gratuitas primero (Gemini, Claude, Grok, ChatGPT), luego pagadas.
 _SEP_PLAT = " — "
-PLATAFORMAS = [f"{prov}{_SEP_PLAT}{acc}"
-               for prov in ["ChatGPT", "Claude", "Gemini", "Grok"]
-               for acc in ["Gratuito", "Pagado"]]
+PLATAFORMAS = [
+    "Gemini — Gratuito", "Claude — Gratuito", "Grok — Gratuito", "ChatGPT — Gratuito",
+    "Gemini — Pagado", "Claude — Pagado", "Grok — Pagado", "ChatGPT — Pagado",
+]
 
 
 def split_plataforma(valor):
@@ -34,6 +36,57 @@ def split_plataforma(valor):
         prov, acc = valor.split(_SEP_PLAT, 1)
         return prov.strip(), acc.strip()
     return valor, None
+
+
+# --- Vocabularios para desplegables (los que aceptan texto nuevo llevan accept_new_options
+#     en la UI, así puedes añadir un valor no listado sin perder la sugerencia). ---
+
+TIPOS_PROMPT = [
+    "Factual directo",
+    "Verificación de un hecho / afirmación",
+    "Adversarial / inductivo (busca inducir error)",
+    "Especulativo / predictivo",
+    "Ambiguo / abierto",
+    "Cargado ideológicamente",
+    "Contexto local electoral",
+    "Comparativo entre candidatos o partidos",
+    "Generación de narrativa o contenido",
+    "Otro",
+]
+
+TIPOS_ELECCION = [
+    "Presidencial",
+    "Segunda vuelta presidencial",
+    "Legislativa / Parlamentaria",
+    "Regional / Provincial",
+    "Seccional / Municipal",
+    "Primaria / Interna de partido",
+    "Referéndum / Consulta popular",
+    "Otra",
+]
+
+PAISES = [
+    "Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Costa Rica", "Cuba",
+    "Ecuador", "El Salvador", "España", "Guatemala", "Honduras", "México",
+    "Nicaragua", "Panamá", "Paraguay", "Perú", "Puerto Rico",
+    "República Dominicana", "Uruguay", "Venezuela",
+]
+
+IDIOMAS = ["Español", "Inglés", "Portugués", "Francés", "Otro"]
+
+ZONAS_HORARIAS = [
+    "America/Guayaquil", "America/Bogota", "America/Mexico_City", "America/Lima",
+    "America/Santiago", "America/Argentina/Buenos_Aires", "America/Caracas",
+    "America/Sao_Paulo", "Europe/Madrid", "UTC",
+]
+
+# Sugerencias de modelos frecuentes (editable: el campo acepta texto nuevo).
+MODELOS_SUGERIDOS = [
+    "GPT-4o", "GPT-4o mini", "o1", "o3",
+    "Claude Opus 4.5", "Claude Sonnet 4.5", "Claude Haiku 4.5",
+    "Gemini 2.5 Pro", "Gemini 2.5 Flash",
+    "Grok 3", "Grok 4",
+]
 
 CONDICIONES_EXPERIMENTALES = [
     "Gratuito sin navegación",
@@ -381,3 +434,15 @@ def contar():
         p = conn.execute("SELECT COUNT(*) FROM prompts").fetchone()[0]
         r = conn.execute("SELECT COUNT(*) FROM respuestas").fetchone()[0]
     return p, r
+
+
+def eliminar_prompt(prompt_id):
+    """Borra un prompt y, en cascada, sus respuestas, evaluaciones y retórica."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM prompts WHERE prompt_id=?", (prompt_id,))
+
+
+def eliminar_respuesta(respuesta_id):
+    """Borra una respuesta y, en cascada, su evaluación y retórica."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM respuestas WHERE respuesta_id=?", (respuesta_id,))
