@@ -174,8 +174,8 @@ elif seccion == "Crear prompt":
         idioma = c4.text_input("Idioma", value="Español")
         tipo_prompt = c5.text_input("Tipo de prompt", placeholder="p. ej. factual, adversarial…")
         zona_horaria = c6.text_input("Zona horaria", value="America/Guayaquil")
-        objetivo = st.text_area("Objetivo del prompt", height=70)
-        obs = st.text_area("Observaciones metodológicas", height=70)
+        fecha_carga = st.date_input("Fecha de carga / búsqueda con la IA",
+                                    value=datetime.now()).strftime("%Y-%m-%d")
         enviar = st.form_submit_button("Guardar prompt")
 
     if enviar:
@@ -185,7 +185,7 @@ elif seccion == "Crear prompt":
             pid = db.crear_prompt(dict(
                 prompt_texto=prompt_texto, tema=tema, pais=pais, eleccion=eleccion,
                 idioma=idioma, tipo_prompt=tipo_prompt, zona_horaria=zona_horaria,
-                objetivo_del_prompt=objetivo, observaciones_metodologicas=obs))
+                fecha_carga=fecha_carga))
             st.success(f"Prompt #{pid} guardado.")
 
 
@@ -201,11 +201,11 @@ elif seccion == "Registrar respuesta":
             st.code(p["prompt_texto"] or "")
         with st.form("form_resp"):
             c1, c2, c3 = st.columns(3)
-            proveedor = c1.selectbox("Proveedor", db.PROVEEDORES)
+            plataforma = c1.selectbox("Plataforma (8 opciones)", db.PLATAFORMAS)
             modelo = c2.text_input("Modelo", placeholder="p. ej. GPT-4o, Claude Opus 4.5…")
             version = c3.text_input("Versión visible (si existe)")
-            c4, c5, c6 = st.columns(3)
-            tipo_acceso = c4.selectbox("Tipo de acceso", db.TIPOS_ACCESO)
+            proveedor, tipo_acceso = db.split_plataforma(plataforma)
+            c5, c6 = st.columns(2)
             condicion = c5.selectbox("Condición experimental", db.CONDICIONES_EXPERIMENTALES)
             navegacion = c6.selectbox("Navegación web", db.NAVEGACION_WEB)
             c7, c8, c9 = st.columns(3)
