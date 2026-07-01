@@ -21,6 +21,20 @@ PROVEEDORES = ["ChatGPT", "Claude", "Gemini", "Grok", "Otro"]
 
 TIPOS_ACCESO = ["Gratuito", "Pagado", "API", "Interfaz web", "Carga manual"]
 
+# Selección rápida por plataforma (proveedor + acceso combinados). 8 opciones.
+_SEP_PLAT = " — "
+PLATAFORMAS = [f"{prov}{_SEP_PLAT}{acc}"
+               for prov in ["ChatGPT", "Claude", "Gemini", "Grok"]
+               for acc in ["Gratuito", "Pagado"]]
+
+
+def split_plataforma(valor):
+    """'ChatGPT — Gratuito' -> ('ChatGPT', 'Gratuito'). Tolera valores vacíos."""
+    if valor and _SEP_PLAT in valor:
+        prov, acc = valor.split(_SEP_PLAT, 1)
+        return prov.strip(), acc.strip()
+    return valor, None
+
 CONDICIONES_EXPERIMENTALES = [
     "Gratuito sin navegación",
     "Gratuito con navegación",
@@ -134,6 +148,7 @@ def init_db():
             eleccion TEXT,
             idioma TEXT,
             tipo_prompt TEXT,
+            fecha_carga TEXT,
             objetivo_del_prompt TEXT,
             observaciones_metodologicas TEXT
         );""")
@@ -199,9 +214,11 @@ def init_db():
 
         conn.commit()
 
-
-# ---------------------------------------------------------------------------
-# Helpers de inserción / actualización
+        # Migración no destructiva: garantizar columnas nuevas en bases previas.
+        cols_prompts = [r[1] for r in c.execute("PRAGMA table_info(prompts)").fetchall()]
+        if "fecha_carga" not in cols_prompts:
+            c.execute("ALTER TABLE prompts ADD COLUMN fecha_carga TEXT")
+        conn.commit()
 # ---------------------------------------------------------------------------
 
 def _now():
@@ -214,7 +231,7 @@ def crear_prompt(data: dict) -> int:
     data.setdefault("fecha_creacion", f)
     data.setdefault("hora_creacion", h)
     campos = ["fecha_creacion", "hora_creacion", "zona_horaria", "prompt_texto",
-              "tema", "pais", "eleccion", "idioma", "tipo_prompt",
+              "tema", "pais", "eleccion", "idioma", "tipo_prompt", "fecha_carga",
               "objetivo_del_prompt", "observaciones_metodologicas"]
     with get_conn() as conn:
         cur = conn.execute(
@@ -337,7 +354,7 @@ def vista_completa():
     SELECT
         p.prompt_id, p.fecha_creacion, p.hora_creacion, p.zona_horaria AS zh_prompt,
         p.prompt_texto, p.tema, p.pais, p.eleccion, p.idioma AS idioma_prompt,
-        p.tipo_prompt, p.objetivo_del_prompt, p.observaciones_metodologicas,
+        p.tipo_prompt, p.fecha_carga, p.objetivo_del_prompt, p.observaciones_metodologicas,
         r.respuesta_id, r.proveedor, r.modelo, r.version_modelo, r.tipo_acceso,
         r.condicion_experimental, r.navegacion_web, r.fecha_consulta, r.hora_consulta,
         r.zona_horaria AS zh_respuesta, r.ubicacion_declarada, r.idioma AS idioma_respuesta,
