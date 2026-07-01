@@ -167,15 +167,19 @@ elif seccion == "Crear prompt":
     with st.form("form_prompt"):
         prompt_texto = st.text_area("Prompt exacto *", height=160)
         c1, c2, c3 = st.columns(3)
-        tema = c1.text_input("Tema")
-        pais = c2.text_input("País")
-        eleccion = c3.text_input("Elección")
+        tema = c1.text_input("Tema", placeholder="p. ej. resultados, encuestas, fraude…")
+        pais = c2.selectbox("País", db.PAISES, index=None,
+                            placeholder="Elige o escribe…", accept_new_options=True)
+        eleccion = c3.selectbox("Elección", db.TIPOS_ELECCION, index=None,
+                                placeholder="Elige el tipo…")
         c4, c5, c6 = st.columns(3)
-        idioma = c4.text_input("Idioma", value="Español")
-        tipo_prompt = c5.text_input("Tipo de prompt", placeholder="p. ej. factual, adversarial…")
-        zona_horaria = c6.text_input("Zona horaria", value="America/Guayaquil")
-        fecha_carga = st.date_input("Fecha de carga / búsqueda con la IA",
-                                    value=datetime.now()).strftime("%Y-%m-%d")
+        idioma = c4.selectbox("Idioma", db.IDIOMAS,
+                              index=db.IDIOMAS.index("Español"), accept_new_options=True)
+        tipo_prompt = c5.selectbox("Tipo de prompt", db.TIPOS_PROMPT, index=None,
+                                   placeholder="Elige el tipo…")
+        zona_horaria = c6.selectbox("Zona horaria", db.ZONAS_HORARIAS,
+                                    index=db.ZONAS_HORARIAS.index("America/Guayaquil"),
+                                    accept_new_options=True)
         enviar = st.form_submit_button("Guardar prompt")
 
     if enviar:
@@ -184,9 +188,10 @@ elif seccion == "Crear prompt":
         else:
             pid = db.crear_prompt(dict(
                 prompt_texto=prompt_texto, tema=tema, pais=pais, eleccion=eleccion,
-                idioma=idioma, tipo_prompt=tipo_prompt, zona_horaria=zona_horaria,
-                fecha_carga=fecha_carga))
-            st.success(f"Prompt #{pid} guardado.")
+                idioma=idioma, tipo_prompt=tipo_prompt, zona_horaria=zona_horaria))
+            st.success(f"Prompt #{pid} guardado. Queda grabado: ahora ve a «Registrar "
+                       "respuesta», elígelo y añade las respuestas de cada IA sin volver "
+                       "a copiarlo.")
 
 
 # ===========================================================================
@@ -197,12 +202,13 @@ elif seccion == "Registrar respuesta":
     pid = selector_prompt("reg_prompt")
     if pid:
         p = db.obtener_prompt(pid)
-        with st.expander("Ver prompt del caso"):
-            st.code(p["prompt_texto"] or "")
+        st.caption("Prompt guardado (no necesitas volver a copiarlo — solo registra la respuesta):")
+        st.code(p["prompt_texto"] or "")
         with st.form("form_resp"):
             c1, c2, c3 = st.columns(3)
             plataforma = c1.selectbox("Plataforma (8 opciones)", db.PLATAFORMAS)
-            modelo = c2.text_input("Modelo", placeholder="p. ej. GPT-4o, Claude Opus 4.5…")
+            modelo = c2.selectbox("Modelo", db.MODELOS_SUGERIDOS, index=None,
+                                  placeholder="Elige o escribe…", accept_new_options=True)
             version = c3.text_input("Versión visible (si existe)")
             proveedor, tipo_acceso = db.split_plataforma(plataforma)
             c5, c6 = st.columns(2)
@@ -211,10 +217,15 @@ elif seccion == "Registrar respuesta":
             c7, c8, c9 = st.columns(3)
             fecha = c7.text_input("Fecha de consulta", value=datetime.now().strftime("%Y-%m-%d"))
             hora = c8.text_input("Hora de consulta", value=datetime.now().strftime("%H:%M"))
-            zh = c9.text_input("Zona horaria", value="America/Guayaquil")
+            zh = c9.selectbox("Zona horaria", db.ZONAS_HORARIAS,
+                              index=db.ZONAS_HORARIAS.index("America/Guayaquil"),
+                              accept_new_options=True, key="zh_resp")
             c10, c11, c12 = st.columns(3)
-            ubicacion = c10.text_input("Ubicación declarada")
-            idioma_r = c11.text_input("Idioma", value="Español")
+            ubicacion = c10.selectbox("Ubicación declarada", db.PAISES, index=None,
+                                      placeholder="Elige o escribe…", accept_new_options=True)
+            idioma_r = c11.selectbox("Idioma", db.IDIOMAS,
+                                     index=db.IDIOMAS.index("Español"),
+                                     accept_new_options=True, key="idi_resp")
             modo = c12.selectbox("Modo de captura", db.MODOS_CAPTURA)
             respuesta = st.text_area("Respuesta completa (pega aquí) *", height=240)
             c13, c14 = st.columns(2)
@@ -537,6 +548,53 @@ elif seccion == "Historial":
         st.info("Sin registros.")
     else:
         st.dataframe(df, width='stretch', height=500)
+
+    st.divider()
+    st.subheader("Borrar datos de prueba")
+    st.caption("El borrado es permanente. Al eliminar un prompt se eliminan también sus "
+               "respuestas, evaluaciones y codificación retórica asociadas.")
+
+    prompts = db.listar_prompts()
+    if not prompts:
+        st.info("No hay prompts que borrar.")
+    else:
+        modo = st.radio("¿Qué deseas borrar?",
+                        ["Un prompt (con todo lo asociado)", "Solo una respuesta"],
+                        horizontal=True)
+
+        if modo.startswith("Un prompt"):
+            opciones = {f"#{p['prompt_id']} · {(p['prompt_texto'] or '')[:60]}": p["prompt_id"]
+                        for p in prompts}
+            etiqueta = st.selectbox("Prompt a eliminar", list(opciones), key="del_prompt")
+            pid = opciones[etiqueta]
+            n_resp = len(db.respuestas_de_prompt(pid))
+            st.warning(f"Se eliminará el prompt #{pid} y sus {n_resp} respuesta(s) asociada(s).")
+            confirmar = st.checkbox("Confirmo que quiero borrarlo de forma permanente",
+                                    key="conf_del_prompt")
+            if st.button("Borrar prompt", type="primary", disabled=not confirmar):
+                db.eliminar_prompt(pid)
+                st.success(f"Prompt #{pid} eliminado.")
+                st.rerun()
+        else:
+            pares = []
+            for p in prompts:
+                for r in db.respuestas_de_prompt(p["prompt_id"]):
+                    pares.append((f"#{r['respuesta_id']} · prompt {p['prompt_id']} · "
+                                  f"{r['proveedor']} / {r['modelo']} ({r['tipo_acceso']})",
+                                  r["respuesta_id"]))
+            if not pares:
+                st.info("No hay respuestas registradas.")
+            else:
+                opciones = {k: v for k, v in pares}
+                etiqueta = st.selectbox("Respuesta a eliminar", list(opciones), key="del_resp")
+                rid = opciones[etiqueta]
+                st.warning(f"Se eliminará la respuesta #{rid} y su evaluación/retórica.")
+                confirmar = st.checkbox("Confirmo que quiero borrarla de forma permanente",
+                                        key="conf_del_resp")
+                if st.button("Borrar respuesta", type="primary", disabled=not confirmar):
+                    db.eliminar_respuesta(rid)
+                    st.success(f"Respuesta #{rid} eliminada.")
+                    st.rerun()
 
 
 # ===========================================================================
